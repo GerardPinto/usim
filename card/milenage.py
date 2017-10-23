@@ -1,4 +1,7 @@
 #!/usr/bin/python
+from binascii import *
+from utils import *
+
 # Rijndael consists of the following operations:
 # - an initial Round Key addition
 # - 9 rounds, numbered 1-9, each consisting of
@@ -20,18 +23,15 @@ class Milenage:
 	CK = None
 	IK = None
 	XRES = None
-	Ki = None
-	RAND = None
-	OPc = None
+	Ki = []
+	RAND = []
+	OPc = []
+	SQN = []
+	AMF = []
 	R = [0x40, 0x0, 0x20, 0x40, 0x60]
-	C = ["00000000000000000000000000000000", 
-	"00000000000000000000000000000001", 
-	"00000000000000000000000000000002", 
-	"00000000000000000000000000000004", 
-	"00000000000000000000000000000008",
-	]
+	C = [0, 1, 2, 4, 8]
 
-	roundKeys = [[[]]]
+	roundKeys = [[[0]*4]*4]*11
 
 	# Rijndael S-box table
 	Sbox =	[99, 124, 119, 123, 242, 107, 111, 197, 48, 1, 103, 43, 254, 215, 171, 118, 
@@ -69,31 +69,32 @@ class Milenage:
 			219, 217, 223, 221, 211, 209, 215, 213, 203, 201, 207, 205, 195, 193, 199, 197, 
 			251, 249, 255, 253, 243, 241, 247, 245, 235, 233, 239, 237, 227, 225, 231, 229]   
 	
-	def __init__(self, Ki=[], RAND=[], OPc=[]):
+	def __init__(self, Ki=[], RAND=[], OPc=[], SQN=[], AMF=[]):
 		self.Ki = Ki
 		self.RAND = RAND
 		self.OPc = OPc
+		self.SQN = SQN
+		self.AMF = AMF
 
-	def rijndaelKeySchedule(key):
+	def rijndaelKeySchedule(self, key):
 		roundConst = 1
-
 		# first round key equals key
 		for index in range(16):
-			roundKeys[0][index & 0x03][index>>2] = key[i]
+			self.roundKeys[0][index & 0x03][index>>2] = key[index]
 
 		# now calculate round keys
 		for i in range(1, 11):
-			roundKeys[i][0][0] = S[roundKeys[i-1][1][3]] ^ roundKeys[i-1][0][0] ^ roundConst
-			roundKeys[i][1][0] = S[roundKeys[i-1][2][3]] ^ roundKeys[i-1][1][0]
-			roundKeys[i][2][0] = S[roundKeys[i-1][3][3]] ^ roundKeys[i-1][2][0]
-			roundKeys[i][3][0] = S[roundKeys[i-1][0][3]] ^ roundKeys[i-1][3][0]
+			self.roundKeys[i][0][0] = self.Sbox[self.roundKeys[i-1][1][3]] ^ self.roundKeys[i-1][0][0] ^ roundConst
+			self.roundKeys[i][1][0] = self.Sbox[self.roundKeys[i-1][2][3]] ^ self.roundKeys[i-1][1][0]
+			self.roundKeys[i][2][0] = self.Sbox[self.roundKeys[i-1][3][3]] ^ self.roundKeys[i-1][2][0]
+			self.roundKeys[i][3][0] = self.Sbox[self.roundKeys[i-1][0][3]] ^ self.roundKeys[i-1][3][0]
 			for j in range(0,4):
-				roundKeys[i][j][1] = roundKeys[i-1][j][1] ^ roundKeys[i][j][0]
-				roundKeys[i][j][2] = roundKeys[i-1][j][2] ^ roundKeys[i][j][1]
-				roundKeys[i][j][3] = roundKeys[i-1][j][3] ^ roundKeys[i][j][2]
+				self.roundKeys[i][j][1] = self.roundKeys[i-1][j][1] ^ self.roundKeys[i][j][0]
+				self.roundKeys[i][j][2] = self.roundKeys[i-1][j][2] ^ self.roundKeys[i][j][1]
+				self.roundKeys[i][j][3] = self.roundKeys[i-1][j][3] ^ self.roundKeys[i][j][2]
 
 			# update round constant
-			roundConst = Xtime[roundConst]
+			roundConst = self.Xtime[roundConst]
 
 	# Round key addition function
 	def keyAdd(self, state, roundKeys, roundNo):
@@ -105,7 +106,7 @@ class Milenage:
 	def byteSub(self, state):
 		for i in range(0,4):
 			for j in range(0,4):
-				state[i][j] = S[state[i][j]]
+				state[i][j] = self.Sbox[state[i][j]]
 
 	# Row shift transformation
 	def shiftRow(self, state):
@@ -132,44 +133,44 @@ class Milenage:
 
 	# mix column transformation
 	def mixColumn(self, state):
-		temp, tmp, tmp0 = -1
+		temp, tmp, tmp0 = -1, -1, -1
 		# do one column at a time
 		for i in range(0,4):
 			temp = state[0][i] ^ state[1][i] ^ state[2][i] ^ state[3][i]
 			tmp0 = state[0][i]
 			# Xtime array does multiply by x in GF2^8
-			tmp = Xtime[state[0][i] ^ state[1][i]]
+			tmp = self.Xtime[state[0][i] ^ state[1][i]]
 			state[0][i] ^= temp ^ tmp
-			tmp = Xtime[state[1][i] ^ state[2][i]]
+			tmp = self.Xtime[state[1][i] ^ state[2][i]]
 			state[1][i] ^= temp ^ tmp
-			tmp = Xtime[state[2][i] ^ state[3][i]]
+			tmp = self.Xtime[state[2][i] ^ state[3][i]]
 			state[2][i] ^= temp ^ tmp
-			tmp = Xtime[state[3][i] ^ tmp0]
+			tmp = self.Xtime[state[3][i] ^ tmp0]
 			state[3][i] ^= temp ^ tmp
 
 	# Rijndael encrypt function takes 16 byte input
 	# and creartes a 16 byte output, using round 
 	# keys derived from 16 byte key Ki
 	def rijndaelEncrypt(self, input, output):
-		state[4][4]
+		state = [[0]*4]*4
 		# initialise state array from input byte string
 		for i in range(0, 16):
 			state[i & 0x3][i>>2] = input[i]
 		
 		# add first round_key
-		KeyAdd(state, roundKeys, 0)
+		self.keyAdd(state, self.roundKeys, 0)
 		
 		# do lots of full rounds
 		for r in range(1,9):
-			ByteSub(state)
-			ShiftRow(state)
-			MixColumn(state)
-			KeyAdd(state, roundKeys, r)
+			self.byteSub(state)
+			self.shiftRow(state)
+			self.mixColumn(state)
+			self.keyAdd(state, self.roundKeys, r)
 		
 		# final round
-		byteSub(state)
-		shiftRow(state)
-		keyAdd(state, roundKeys, r)
+		self.byteSub(state)
+		self.shiftRow(state)
+		self.keyAdd(state, self.roundKeys, r)
 		
 		# produce output byte string from state array
 		for i in range(0, 16):
@@ -179,10 +180,115 @@ class Milenage:
 	# random challenge RAND, sequence number SQN and 
 	# authentication management field AMF.
 	def f1(self):
-		pass
+		temp = [0]*16
+		rijndaelInput = [0]*16
+		in1 = [0]*16
+		out1 = [0]*16
+		mac_a = [0]*8
+
+		self.rijndaelKeySchedule(KI)
+
+		# Here compute OPc if OP is given
+		
+		for i in range(0, 16):			
+			rijndaelInput[i] = self.RAND[i] ^ self.OPc[i]
+		
+		self.rijndaelEncrypt(rijndaelInput, temp)
+
+		for i in range(0, 6):
+			in1[i] = self.SQN[i]
+			in1[i+8] = self.SQN[i]
+
+		for i in range(0, 2):
+			in1[i+6] = self.AMF[i]
+			in1[i+14] = self.AMF[i]
+
+		# XOR OPc and in1, rotate by r1=64, and XOR
+		# on the constant c1 (which is all zeroes)
+		for i in range(0, 16):
+			rijndaelInput[(i+8) % 16] = in1[i] ^ self.OPc[i]
+		rijndaelInput[15] ^= C[0];
+		
+		# XOR on the value temp computed before
+		for i in range(0, 16):
+			rijndaelInput[i] ^= temp[i]
+		
+		self.rijndaelEncrypt(rijndaelInput, out1)
+		
+		for i in range(0, 16):
+			out1[i] ^= self.OPc[i]
+		
+		for i in range(0, 8):
+			mac_a[i] = out1[i]
+
+		return mac_a
+
+	# Computes resynch authentication code MAC-S from key K, random
+	# challenge RAND, sequence number SQN and authentication management
+	# field AMF.
+	def f1star(self):
+		temp = [0]*16
+		rijndaelInput = [0]*16
+		in1 = [0]*16
+		out1 = [0]*16
+		mac_s = [0]*8	
+
+		self.rijndaelKeySchedule(KI)
+
+		# Here compute OPc if OP is given
+
+		for i in range(0, 16):
+			rijndaelInput[i] = self.RAND[i] ^ self.OPc[i]
+		
+		self.rijndaelEncrypt(rijndaelInput, temp)
+		
+		for i in range(0, 6):
+			in1[i] = self.SQN[i]
+			in1[i+8] = self.SQN[i]
+		
+		for i in range(0, 2):
+			in1[i+6] = self.AMF[i]
+			in1[i+14] = self.AMF[i]
+
+		# XOR OPc and in1, rotate by r1=64, and XOR
+		# on the constant c1 (which is all zeroes)		
+		for i in range(0, 16):
+			rijndaelInput[(i+8) % 16] = in1[i] ^ self.OPc[i]
+		rijndaelInput[15] ^= C[0];
+		
+		# XOR on the value temp computed before
+		for i in range(0, 16):
+			rijndaelInput[i] ^= temp[i]
+		
+		self.rijndaelEncrypt(rijndaelInput, out1)
+		
+		for i in range(0, 16):
+			out1[i] ^= self.OPc[i]
+		
+		for i in range(0, 8):
+			mac_s[i] = out1[i+8]
+
+		return mac_s
 
 	# Takes key Ki and random challenge RAND, and 
 	# returns response RES, confidentiality key CK, 
 	# integrity key IK and anonymity key AK.
 	def f2345(self):
 		pass
+
+	# Takes key K and random challenge RAND, and 
+	# returns resynch anonymity key AK.
+	def f5star(self):
+		pass
+
+if __name__ == "__main__":
+	RAND = stringToByte(a2b_hex("00000000000000000000000000000000"))
+	OPc = stringToByte(a2b_hex("3CE72BE7C01A305AE798B6C96C7506F3"))
+	AMF = stringToByte(a2b_hex("8000"))
+	SQN = stringToByte(a2b_hex("000000000000"))
+	KI = stringToByte(a2b_hex("73C0987F885595CDC2733F5B98DF6F6A"))
+	
+	m = Milenage(KI, RAND, OPc, SQN, AMF)	
+	
+	print m.f1()
+	print m.f1star()
