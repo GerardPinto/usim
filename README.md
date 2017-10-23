@@ -25,5 +25,6 @@ handshake with AAA server (FreeRadius).
 5. http://www.etsi.org/deliver/etsi_ts/135200_135299/135206/09.00.00_60/ts_135206v090000p.pdf
 6. http://laforge.gnumonks.org/blog/20170307-usim_sequence_numbers/
 7. https://cryptome.org/3gpp/33105-900.pdf
+8. http://niviuk.free.fr/milenage_src.php
 
 
