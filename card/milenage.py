@@ -19,10 +19,11 @@ from utils import *
 # spec can be found in the folder of this project
 class Milenage:
 
-	AK = None
-	CK = None
-	IK = None
-	XRES = None
+	KI = []
+	AK = []
+	CK = []
+	IK = []
+	RES = []
 	Ki = []
 	RAND = []
 	OPc = []
@@ -69,12 +70,18 @@ class Milenage:
 			219, 217, 223, 221, 211, 209, 215, 213, 203, 201, 207, 205, 195, 193, 199, 197, 
 			251, 249, 255, 253, 243, 241, 247, 245, 235, 233, 239, 237, 227, 225, 231, 229]   
 	
-	def __init__(self, Ki=[], RAND=[], OPc=[], SQN=[], AMF=[]):
-		self.Ki = Ki
-		self.RAND = RAND
-		self.OPc = OPc
-		self.SQN = SQN
-		self.AMF = AMF
+	def __init__(self, ki=[], rand=[], opc=[], sqn=[], amf=[]):
+		self.KI = ki
+		self.RAND = rand
+		self.OPc = opc
+		self.SQN = sqn
+		self.AMF = amf
+		self.RES = [0]*8
+		self.KI = [0]*16		
+		self.CK = [0]*16
+		self.IK = [0]*16
+		self.AK = [0]*6
+		
 
 	def rijndaelKeySchedule(self, key):
 		roundConst = 1
@@ -186,7 +193,7 @@ class Milenage:
 		out1 = [0]*16
 		mac_a = [0]*8
 
-		self.rijndaelKeySchedule(KI)
+		self.rijndaelKeySchedule(self.KI)
 
 		# Here compute OPc if OP is given
 		
@@ -207,7 +214,7 @@ class Milenage:
 		# on the constant c1 (which is all zeroes)
 		for i in range(0, 16):
 			rijndaelInput[(i+8) % 16] = in1[i] ^ self.OPc[i]
-		rijndaelInput[15] ^= C[0];
+		rijndaelInput[15] ^= self.C[0];
 		
 		# XOR on the value temp computed before
 		for i in range(0, 16):
@@ -233,7 +240,7 @@ class Milenage:
 		out1 = [0]*16
 		mac_s = [0]*8	
 
-		self.rijndaelKeySchedule(KI)
+		self.rijndaelKeySchedule(self.KI)
 
 		# Here compute OPc if OP is given
 
@@ -254,7 +261,7 @@ class Milenage:
 		# on the constant c1 (which is all zeroes)		
 		for i in range(0, 16):
 			rijndaelInput[(i+8) % 16] = in1[i] ^ self.OPc[i]
-		rijndaelInput[15] ^= C[0];
+		rijndaelInput[15] ^= self.C[0];
 		
 		# XOR on the value temp computed before
 		for i in range(0, 16):
@@ -274,12 +281,95 @@ class Milenage:
 	# returns response RES, confidentiality key CK, 
 	# integrity key IK and anonymity key AK.
 	def f2345(self):
-		pass
+		temp = [0]*16
+		out = [0]*16
+		rijndaelInput = [0]*16
+
+		self.rijndaelKeySchedule(self.KI)
+		
+		# Here compute OPc if OP is given
+
+		for i in range(0, 16):
+			rijndaelInput[i] = self.RAND[i] ^ self.OPc[i]
+		
+		self.rijndaelEncrypt(rijndaelInput, temp)
+		
+		# To obtain output block OUT2: XOR OPc and TEMP,
+		# rotate by r2=0, and XOR on the constant c2 (which
+		# is all zeroes except that the last bit is 1).
+		for i in range(0, 16):
+			rijndaelInput[i] = temp[i] ^ self.OPc[i]
+		rijndaelInput[15] ^= self.C[1]
+		
+		self.rijndaelEncrypt(rijndaelInput, out)
+		for i in range(0, 16):
+			out[i] ^= self.OPc[i]
+		
+		for i in range(0, 8):
+			self.RES[i] = out[i+8]
+		
+		for i in range(0, 6):
+			self.AK[i] = out[i]
+		
+		# To obtain output block OUT3: XOR OPc and TEMP,
+		# rotate by r3=32, and XOR on the constant c3 (which
+		# is all zeroes except that the next to last bit is 1).
+		for i in range(0, 16):
+			rijndaelInput[(i+12) % 16] = temp[i] ^ self.OPc[i]
+		rijndaelInput[15] ^= self.C[2]
+		
+		self.rijndaelEncrypt(rijndaelInput, out)
+		
+		for i in range(0, 16):
+			out[i] ^= self.OPc[i]
+		for i in range(0, 16):
+			self.CK[i] = out[i]
+
+		# To obtain output block OUT4: XOR OPc and TEMP,
+		# rotate by r4=64, and XOR on the constant c4 (which
+		# is all zeroes except that the 2nd from last bit is 1). */		
+		for i in range(0, 16):
+			rijndaelInput[(i+8) % 16] = temp[i] ^ self.OPc[i]
+		rijndaelInput[15] ^= self.C[3]
+		
+		self.rijndaelEncrypt(rijndaelInput, out);
+		
+		for i in range(0, 16):
+			out[i] ^= self.OPc[i]
+		
+		for i in range(0, 16):
+			self.IK[i] = out[i]
 
 	# Takes key K and random challenge RAND, and 
 	# returns resynch anonymity key AK.
 	def f5star(self):
-		pass
+		temp = [0]*16
+		out = [0]*16
+		rijndaelInput = [0]*16
+
+		self.rijndaelKeySchedule(self.KI);
+
+		# Here compute OPc if OP is given
+
+		for i in range(0, 16):
+			rijndaelInput[i] = self.RAND[i] ^ self.OPc[i]
+		
+		self.rijndaelEncrypt(rijndaelInput, temp)
+		
+		# To obtain output block OUT5: XOR OPc and TEMP,
+		# rotate by r5=96, and XOR on the constant c5 (which
+		# is all zeroes except that the 3rd from last bit is 1).
+		for i in range(0, 16):
+			rijndaelInput[(i+4) % 16] = temp[i] ^ self.OPc[i]
+		rijndaelInput[15] ^= self.C[4]
+		
+		self.rijndaelEncrypt(rijndaelInput, out);
+		
+		for i in range(0, 16):
+			out[i] ^= self.OPc[i]
+		
+		for i in range(0, 6):
+			self.AK[i] = out[i]
 
 if __name__ == "__main__":
 	RAND = stringToByte(a2b_hex("00000000000000000000000000000000"))
@@ -292,3 +382,5 @@ if __name__ == "__main__":
 	
 	print m.f1()
 	print m.f1star()
+	m.f2345()
+	m.f5star()
